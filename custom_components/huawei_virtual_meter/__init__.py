@@ -26,7 +26,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "server": None,
         "udp": None,
         "udp_protocol": None,
-        "queried_registers": set()
+        "queried_registers": set(),
+        "active_writers": set()
     }
     hass.data[DOMAIN][entry.entry_id] = entry_data
 
@@ -143,31 +144,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"UDP Server konnte nicht gestartet werden: {err}") from err
 
     async def handle_modbus(reader, writer):
-        while True:
-            try:
-                frame = await asyncio.wait_for(reader.read(4096), timeout=60)
-                if not frame:
+        entry_data["active_writers"].add(writer)
+        try:
+            while True:
+                try:
+                    frame = await asyncio.wait_for(reader.read(4096), timeout=60)
+                    if not frame:
+                        break
+                    if len(frame) >= 12 and frame[7] in (3, 4):
+                        start = struct.unpack(">H", frame[8:10])[0]
+                        count = struct.unpack(">H", frame[10:12])[0]
+                        
+                        payload = b""
+                        for i in range(start, start + count):
+                            entry_data["queried_registers"].add(i)
+                            val = entry_data["modbus_values"].get(i, 0)
+                            payload += struct.pack(">H", val & 0xFFFF)
+                        
+                        resp = (frame[0:2] + b"\x00\x00" + 
+                                struct.pack(">H", len(payload) + 3) + 
+                                frame[6:7] + bytes([frame[7], len(payload)]) + 
+                                payload)
+                        writer.write(resp)
+                        await writer.drain()
+                except Exception:
                     break
-                if len(frame) >= 12 and frame[7] in (3, 4):
-                    start = struct.unpack(">H", frame[8:10])[0]
-                    count = struct.unpack(">H", frame[10:12])[0]
-                    
-                    payload = b""
-                    for i in range(start, start + count):
-                        entry_data["queried_registers"].add(i)
-                        val = entry_data["modbus_values"].get(i, 0)
-                        payload += struct.pack(">H", val & 0xFFFF)
-                    
-                    resp = (frame[0:2] + b"\x00\x00" + 
-                            struct.pack(">H", len(payload) + 3) + 
-                            frame[6:7] + bytes([frame[7], len(payload)]) + 
-                            payload)
-                    writer.write(resp)
-                    await writer.drain()
-            except Exception:
-                break
-        writer.close()
-        await writer.wait_closed()
+        finally:
+            entry_data["active_writers"].discard(writer)
+            writer.close()
+            await writer.wait_closed()
 
     try:
         server = await asyncio.start_server(handle_modbus, "0.0.0.0", 502)
@@ -182,6 +187,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info("HA stoppt. Beende Virtual Meter Server...")
         if entry_data["server"]:
             entry_data["server"].close()
+            # Force-close all active client connections before waiting
+            for writer in list(entry_data["active_writers"]):
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+            entry_data["active_writers"].clear()
             await entry_data["server"].wait_closed()
         if entry_data["udp"]:
             entry_data["udp"].close()
@@ -200,6 +212,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if entry_data["server"]:
         entry_data["server"].close()
+        # Force-close all active client connections before waiting
+        for writer in list(entry_data.get("active_writers", set())):
+            try:
+                writer.close()
+            except Exception:
+                pass
+        entry_data["active_writers"].clear()
         await entry_data["server"].wait_closed()
     if entry_data["udp"]:
         entry_data["udp"].close()
