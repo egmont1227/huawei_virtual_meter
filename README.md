@@ -37,6 +37,7 @@ By utilizing this integration, your Huawei SCharger will automatically discover 
    - **Emulator IP Address:** Select the IP address of your Home Assistant instance that the SCharger should connect to.
    - **Serial Number:** Provide a simulated serial number (default `HV0000000001` is fine).
    - **UDP Discovery Port:** Set the port for the Huawei UDP discovery protocol. Use `6600` for older SCharger firmware (pre-SPC231). Use `10086` for SCharger firmware `V100R023C10SPC231` and later. You can change this later via **Settings** > **Edit settings**.
+   - **Unit ID:** The Modbus unit ID the virtual meter responds to (default `11`). Must match the unit ID the SCharger expects. Can be changed later via **Edit settings** without reloading.
 4. After adding the integration, click on **CONFIGURE** to map your registers.
 
 ## Mapping Registers
@@ -54,8 +55,50 @@ Click **CONFIGURE** on the integration page. You will see three options:
    - To **delete** a register, simply clear both the Entity ID and the Fixed Value fields and click Submit.
 3. **Edit settings:**
    - Change the **UDP Discovery Port** without recreating the integration.
+   - Change the **Unit ID** (Modbus slave address, default `11`).
    - Use `6600` for older SCharger firmware (pre-SPC231) or `10086` for SCharger firmware `V100R023C10SPC231` and later.
-   - Changing the port requires reloading the integration to take effect.
+   - Changing the port requires reloading the integration to take effect. Unit ID changes take effect immediately (no reload needed).
+
+### Supported Huawei Modbus Registers
+
+| Register | Name | Type | Width | Gain | Description |
+|----------|------|------|-------|------|-------------|
+| 37100 | Meter status | UINT16 | 1 | 1 | Online/offline status |
+| 37101 | Grid voltage (A phase) | INT32 | 2 | 10 | Volts |
+| 37103 | B phase voltage | INT32 | 2 | 10 | Volts |
+| 37105 | C phase voltage | INT32 | 2 | 10 | Volts |
+| 37107 | Grid current (A phase) | INT32 | 2 | 10 | Amps |
+| 37109 | B phase current | INT32 | 2 | 10 | Amps |
+| 37111 | C phase current | INT32 | 2 | 10 | Amps |
+| 37113 | Active power | INT32 | 2 | 1 | Watts. **Positive = export/surplus**, Negative = import |
+| 37115 | Reactive power | INT32 | 2 | 1000 | VAR |
+| 37117 | Power factor | INT16 | 1 | 1000 | cos phi |
+| 37118 | Grid frequency | INT16 | 1 | 100 | Hz |
+| 37119 | Positive active electricity | INT32 | 2 | 1 | Wh accumulated import |
+| 37121 | Reverse active electricity | INT32 | 2 | 1 | Wh accumulated export |
+| 37123 | Accumulated reactive power | INT32 | 2 | 1 | varh |
+| 37125 | Meter type | UINT16 | 1 | 1 | 0 = single-phase, 1 = three-phase |
+| 37126 | A-B line voltage | INT32 | 2 | 10 | Volts |
+| 37128 | B-C line voltage | INT32 | 2 | 10 | Volts |
+| 37130 | C-A line voltage | INT32 | 2 | 10 | Volts |
+| 37132 | A phase active power | INT32 | 2 | 1 | Watts |
+| 37134 | B phase active power | INT32 | 2 | 1 | Watts |
+| 37136 | C phase active power | INT32 | 2 | 1 | Watts |
+| 37138 | Meter model detection | UINT16 | 1 | 1 | Detection result |
+
+### Typical Register Configuration
+
+For a typical single-phase setup with a Huawei SCharger:
+
+| Register | Source | Factor | Notes |
+|----------|--------|--------|-------|
+| 37101 | Fixed value: 230 | 10 | Voltage L1 (230.0V × 10 = 2300) |
+| 37103 | Fixed value: 230 | 10 | Voltage L2 |
+| 37105 | Fixed value: 230 | 10 | Voltage L3 |
+| 37113 | HA entity (grid power) | 1 | Primary surplus sensor. Positive = export |
+| 37117 | HA entity (power factor) | 1000 | cos phi × 1000 |
+| 37118 | HA entity (frequency) | 100 | Hz × 100 (50.0 Hz → 5000) |
+| 37125 | Fixed value: 0 | 1 | Single-phase meter |
 
 ### Common Huawei Registers
 To get started, you will typically want to map at least the following:

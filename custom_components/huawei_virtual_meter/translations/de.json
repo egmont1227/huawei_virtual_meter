@@ -17,6 +17,9 @@
     "error": {
       "invalid_address": "Ungültige Adresse! Bitte eine gültige, positive Zahl eingeben."
     },
+    "abort": {
+      "no_registers": "Noch keine Register konfiguriert. Bitte erst 'Neues Register-Mapping hinzufügen' verwenden."
+    },
     "step": {
       "init": {
         "title": "Virtual Meter Optionen",
@@ -24,7 +27,7 @@
         "menu_options": {
           "add_register": "Neues Register-Mapping hinzufügen",
           "edit_registers": "Konfigurierte Register bearbeiten",
-          "edit_settings": "Einstellungen bearbeiten (UDP Discovery Port)"
+          "edit_settings": "Einstellungen bearbeiten (UDP-Port, Unit ID)"
         }
       },
       "add_register": {

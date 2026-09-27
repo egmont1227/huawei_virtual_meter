@@ -17,6 +17,9 @@
     "error": {
       "invalid_address": "Invalid address! Please enter a valid positive number."
     },
+    "abort": {
+      "no_registers": "No registers configured yet. Use 'Add a new register mapping' first."
+    },
     "step": {
       "init": {
         "title": "Virtual Meter Options",
@@ -24,7 +27,7 @@
         "menu_options": {
           "add_register": "Add a new register mapping",
           "edit_registers": "Edit configured registers",
-          "edit_settings": "Edit settings (UDP discovery port)"
+          "edit_settings": "Edit settings (UDP port, Unit ID)"
         }
       },
       "add_register": {

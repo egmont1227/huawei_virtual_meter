@@ -36,7 +36,7 @@ class VirtualMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(CONF_SERIAL, default="HV0000000001"): str,
                 vol.Required(CONF_UDP_PORT, default=DEFAULT_UDP_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-                vol.Required(CONF_UNIT_ID, default=DEFAULT_UNIT_ID): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+                vol.Required(CONF_UNIT_ID, default=DEFAULT_UNIT_ID): vol.Coerce(int),
             })
         )
 
@@ -81,7 +81,7 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="edit_settings",
             data_schema=vol.Schema({
                 vol.Required(CONF_UDP_PORT, default=current_udp_port): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-                vol.Required(CONF_UNIT_ID, default=current_unit_id): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+                vol.Required(CONF_UNIT_ID, default=current_unit_id): vol.Coerce(int),
             })
         )
 
@@ -201,9 +201,9 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
             
             schema[vol.Required(f"factor_{r_str}", default=conf.get("factor", 1.0))] = vol.Coerce(float)
 
-        # Wenn keine konfiguriert sind, zurück zum Menü
+        # Wenn keine konfiguriert sind, abbrechen mit Hinweis
         if not schema:
-            return await self.async_step_init()
+            return self.async_abort(reason="no_registers")
 
         return self.async_show_form(
             step_id="edit_registers",
