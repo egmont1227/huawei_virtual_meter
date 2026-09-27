@@ -18,7 +18,8 @@
       "invalid_address": "Ungültige Adresse! Bitte eine gültige, positive Zahl eingeben."
     },
     "abort": {
-      "no_registers": "Noch keine Register konfiguriert. Bitte erst 'Neues Register-Mapping hinzufügen' verwenden."
+      "no_registers": "Es sind noch keine Register konfiguriert. Verwenden Sie zunächst 'Neues Register-Mapping hinzufügen'.",
+      "settings_saved": "Einstellungen gespeichert. Die Integration wird neu geladen, um den neuen UDP-Port anzuwenden."
     },
     "step": {
       "init": {

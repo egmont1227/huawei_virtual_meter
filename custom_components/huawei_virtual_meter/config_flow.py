@@ -47,6 +47,12 @@ class VirtualMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
 
+    async def _delayed_reload(self, old_port, new_port):
+        """Reload the integration after a short delay to let options save first."""
+        import asyncio
+        await asyncio.sleep(2)
+        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
     async def async_step_init(self, user_input=None):
         """Hauptmenü der Optionen."""
         return self.async_show_menu(
@@ -62,20 +68,23 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
             new_data = dict(self.config_entry.data)
             new_data[CONF_UDP_PORT] = new_port
             new_data[CONF_UNIT_ID] = user_input[CONF_UNIT_ID]
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
             
-            # Schedule a reload so the UDP listener restarts on the new port
+            # Update entry data (port/unit_id) — options (registers) are NOT touched
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data=new_data
+            )
+            
             if old_port != new_port:
                 _LOGGER.info("UDP port changed from %d to %d, scheduling integration reload", old_port, new_port)
                 self.hass.async_create_task(
-                    self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                    self._delayed_reload(old_port, new_port)
                 )
-            # Unit ID change does NOT require reload — read dynamically per connection
             
-            # Preserve existing register options — only update settings, don't wipe registers
-            existing_options = dict(self.config_entry.options)
-            existing_options.pop(CONF_REGISTERS, None)  # keep registers untouched
-            return self.async_create_entry(title="", data=existing_options)
+            # Abort the options flow instead of creating an entry.
+            # async_create_entry(data=X) REPLACES options with X.
+            # async_abort() ends the flow WITHOUT touching options at all.
+            return self.async_abort(reason="settings_saved")
         
         current_udp_port = self.config_entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
         current_unit_id = self.config_entry.data.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)
