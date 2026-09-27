@@ -59,7 +59,7 @@ Click **CONFIGURE** on the integration page. You will see three options:
 
 ### Common Huawei Registers
 To get started, you will typically want to map at least the following:
-- **37113 (Active power):** Your total home grid consumption/export. (Positive = consuming from grid, Negative = exporting to grid).
+- **37113 (Active power):** Your total home grid consumption/export. (Positive = exporting to grid / surplus available, Negative = consuming from grid).
 - **37125 (Meter type):** Usually set as a **Fixed Value**: `0` for Single-Phase, `1` for Three-Phase.
 - **37101, 37103, 37105 (Phase Voltages):** Can be mapped to voltage sensors or set to a fixed value like `230`.
 
