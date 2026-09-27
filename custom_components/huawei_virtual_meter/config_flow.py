@@ -72,7 +72,10 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
                 )
             # Unit ID change does NOT require reload — read dynamically per connection
             
-            return self.async_create_entry(title="", data={})
+            # Preserve existing register options — only update settings, don't wipe registers
+            existing_options = dict(self.config_entry.options)
+            existing_options.pop(CONF_REGISTERS, None)  # keep registers untouched
+            return self.async_create_entry(title="", data=existing_options)
         
         current_udp_port = self.config_entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
         current_unit_id = self.config_entry.data.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)
