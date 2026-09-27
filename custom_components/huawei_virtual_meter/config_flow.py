@@ -4,7 +4,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.components import network
-from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, METER_REGISTERS
+from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, CONF_UNIT_ID, DEFAULT_UNIT_ID, METER_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ class VirtualMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(CONF_SERIAL, default="HV0000000001"): str,
                 vol.Required(CONF_UDP_PORT, default=DEFAULT_UDP_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                vol.Required(CONF_UNIT_ID, default=DEFAULT_UNIT_ID): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
             })
         )
 
@@ -54,12 +55,13 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_edit_settings(self, user_input=None):
-        """UDP Discovery Port und andere Einstellungen bearbeiten."""
+        """UDP Discovery Port, Unit ID und andere Einstellungen bearbeiten."""
         if user_input is not None:
             old_port = self.config_entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
             new_port = user_input[CONF_UDP_PORT]
             new_data = dict(self.config_entry.data)
             new_data[CONF_UDP_PORT] = new_port
+            new_data[CONF_UNIT_ID] = user_input[CONF_UNIT_ID]
             self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
             
             # Schedule a reload so the UDP listener restarts on the new port
@@ -68,15 +70,18 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
                 self.hass.async_create_task(
                     self.hass.config_entries.async_reload(self.config_entry.entry_id)
                 )
+            # Unit ID change does NOT require reload — read dynamically per connection
             
             return self.async_create_entry(title="", data={})
         
         current_udp_port = self.config_entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
+        current_unit_id = self.config_entry.data.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)
         
         return self.async_show_form(
             step_id="edit_settings",
             data_schema=vol.Schema({
                 vol.Required(CONF_UDP_PORT, default=current_udp_port): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                vol.Required(CONF_UNIT_ID, default=current_unit_id): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
             })
         )
 

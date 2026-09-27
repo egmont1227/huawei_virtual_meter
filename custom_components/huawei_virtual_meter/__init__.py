@@ -3,18 +3,46 @@ import logging
 import struct
 import ipaddress
 import errno
+import datetime
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.event import async_track_state_change_event
-from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, METER_REGISTERS
+from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, CONF_UNIT_ID, DEFAULT_UNIT_ID, METER_REGISTERS, DETECTION_REGISTER, DETECTION_VALUE, DATE_REGISTER, HEADER_BLOCK
 
 _LOGGER = logging.getLogger(__name__)
 
 MAGIC = b"\x5A\x5A\x5A\x5A"
 APP_MAGIC = b"\x00\x41\x3A"
+
+
+def _crc16_modbus(data: bytes) -> int:
+    """Calculate CRC16-Modbus checksum."""
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 1:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc
+
+
+def _seed_static_registers(modbus_values: dict):
+    """Seed header block, detection register, and live clock into the register map."""
+    # Header block at register 0
+    for i, val in enumerate(HEADER_BLOCK):
+        modbus_values[i] = val & 0xFFFF
+    # Detection register 0x7D1 = 3 (critical for Huawei recognition)
+    modbus_values[DETECTION_REGISTER] = DETECTION_VALUE
+    # Live clock at register 0x2F
+    now = datetime.datetime.now()
+    clock_vals = [now.second, now.minute, now.hour, now.day, now.month, now.year]
+    for i, val in enumerate(clock_vals):
+        modbus_values[DATE_REGISTER + i] = val & 0xFFFF
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Setzt die Virtual Meter Integration aus einem ConfigEntry auf."""
@@ -98,6 +126,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     update_register_map()
     
+    # Seed static registers (header block, detection register, clock)
+    _seed_static_registers(entry_data["modbus_values"])
+    
+    # Periodic clock update every 10 seconds
+    async def _clock_updater():
+        while True:
+            _seed_static_registers(entry_data["modbus_values"])
+            await asyncio.sleep(10)
+    clock_task = asyncio.create_task(_clock_updater())
+    entry_data["clock_task"] = clock_task
+    
     # Listener, der aufgerufen wird, wenn die Optionen im UI geändert werden
     async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
         update_register_map()
@@ -149,13 +188,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def handle_modbus(reader, writer):
         entry_data["active_writers"].add(writer)
+        handshake_done = False
         try:
             while True:
                 try:
                     frame = await asyncio.wait_for(reader.read(4096), timeout=60)
                     if not frame:
                         break
+                    
+                    # --- Huawei proprietary handshake handler ---
+                    # The SCharger wallbox sends a 75-byte auth/handshake frame
+                    # (starts with 0xF6, contains serial + crypto challenge +
+                    # CRC16-Modbus checksum) BEFORE any Modbus traffic.
+                    # If unanswered, the wallbox falls back to TLS.
+                    # Strategy: acknowledge the frame and delay, letting the
+                    # wallbox transition to standard Modbus reads.
+                    if not handshake_done and len(frame) >= 4 and frame[0] == 0xF6:
+                        _LOGGER.info("Huawei handshake frame received (%d bytes) from %s — acknowledging",
+                                     len(frame), writer.get_extra_info('peername'))
+                        handshake_done = True
+                        # Don't send a response — just ACK at TCP level (automatic).
+                        # The wallbox will retry, and eventually transition to Modbus.
+                        continue
+                    
+                    # --- TLS ClientHello detection ---
+                    # If the wallbox sends TLS (0x16 0x03 0x01), close the connection
+                    # so it cycles back to plaintext.
+                    if len(frame) >= 3 and frame[0] == 0x16 and frame[1] == 0x03:
+                        _LOGGER.info("TLS ClientHello detected from %s — closing to force plaintext retry",
+                                     writer.get_extra_info('peername'))
+                        break
+                    
+                    # --- Standard Modbus TCP handler ---
                     if len(frame) >= 12 and frame[7] in (3, 4):
+                        # Read unit_id dynamically (no reload needed)
+                        unit_id = entry.data.get(CONF_UNIT_ID, DEFAULT_UNIT_ID)
+                        
+                        # Check unit ID matches (byte 6 in Modbus TCP)
+                        if frame[6] != unit_id:
+                            _LOGGER.debug("Unit ID mismatch: got %d, expected %d", frame[6], unit_id)
+                            continue
+                        
                         start = struct.unpack(">H", frame[8:10])[0]
                         count = struct.unpack(">H", frame[10:12])[0]
                         
@@ -189,6 +262,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def _async_stop_server(event):
         _LOGGER.info("HA stoppt. Beende Virtual Meter Server...")
+        if entry_data.get("clock_task"):
+            entry_data["clock_task"].cancel()
+            try:
+                await entry_data["clock_task"]
+            except asyncio.CancelledError:
+                pass
         if entry_data["server"]:
             entry_data["server"].close()
             # Force-close all active client connections before waiting
@@ -214,6 +293,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry_id not in hass.data[DOMAIN]: return True
     entry_data = hass.data[DOMAIN].pop(entry_id)
 
+    if entry_data.get("clock_task"):
+        entry_data["clock_task"].cancel()
+        try:
+            await entry_data["clock_task"]
+        except asyncio.CancelledError:
+            pass
     if entry_data["server"]:
         entry_data["server"].close()
         # Force-close all active client connections before waiting
