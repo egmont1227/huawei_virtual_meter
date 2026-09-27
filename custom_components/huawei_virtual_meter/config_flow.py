@@ -3,7 +3,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.components import network
-from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, METER_REGISTERS
+from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, METER_REGISTERS
 
 class VirtualMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -32,6 +32,7 @@ class VirtualMeterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(options=ip_options)
                 ),
                 vol.Required(CONF_SERIAL, default="HV0000000001"): str,
+                vol.Required(CONF_UDP_PORT, default=DEFAULT_UDP_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
             })
         )
 
@@ -46,7 +47,24 @@ class VirtualMeterOptionsFlowHandler(config_entries.OptionsFlow):
         """Hauptmenü der Optionen."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["add_register", "edit_registers"]
+            menu_options=["add_register", "edit_registers", "edit_settings"]
+        )
+
+    async def async_step_edit_settings(self, user_input=None):
+        """UDP Discovery Port und andere Einstellungen bearbeiten."""
+        if user_input is not None:
+            new_data = dict(self.config_entry.data)
+            new_data[CONF_UDP_PORT] = user_input[CONF_UDP_PORT]
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            return self.async_create_entry(title="", data={})
+        
+        current_udp_port = self.config_entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
+        
+        return self.async_show_form(
+            step_id="edit_settings",
+            data_schema=vol.Schema({
+                vol.Required(CONF_UDP_PORT, default=current_udp_port): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+            })
         )
 
     async def async_step_add_register(self, user_input=None):

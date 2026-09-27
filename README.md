@@ -10,7 +10,7 @@ By utilizing this integration, your Huawei SCharger will automatically discover 
 ## Features
 
 - 🔋 **Seamless Integration:** Emulates the official "3.3 Meter Equipment Register" Modbus map required by Huawei SChargers.
-- 📡 **Auto-Discovery:** Simulates the Huawei UDP discovery protocol on port 6600, allowing the SCharger to find the meter automatically.
+- 📡 **Auto-Discovery:** Simulates the Huawei UDP discovery protocol, allowing the SCharger to find the meter automatically. The discovery port is configurable (default `6600` for older firmware, `10086` for SPC231+).
 - ⚙️ **Direct UI Configuration:** Configure, map, and edit all your Modbus registers directly from the Home Assistant UI. No YAML required!
 - 🎛️ **Entity & Fixed Value Support:** Map live Home Assistant entities (e.g., `sensor.grid_power`) or set fixed values (e.g., a static `230V` for voltage) for specific registers.
 - 🧮 **Automatic Data Handling:** Automatically manages data types (`INT16`, `UINT16`, `INT32`), correct 32-bit value splitting (High/Low words), and applies the required Huawei scaling factors (gains).
@@ -36,11 +36,12 @@ By utilizing this integration, your Huawei SCharger will automatically discover 
 3. During the initial setup:
    - **Emulator IP Address:** Select the IP address of your Home Assistant instance that the SCharger should connect to.
    - **Serial Number:** Provide a simulated serial number (default `HV0000000001` is fine).
+   - **UDP Discovery Port:** Set the port for the Huawei UDP discovery protocol. Use `6600` for older SCharger firmware (pre-SPC231). Use `10086` for SCharger firmware `V100R023C10SPC231` and later. You can change this later via **Settings** > **Edit settings**.
 4. After adding the integration, click on **CONFIGURE** to map your registers.
 
 ## Mapping Registers
 
-Click **CONFIGURE** on the integration page. You will see two options:
+Click **CONFIGURE** on the integration page. You will see three options:
 
 1. **Add a new register mapping:**
    - Choose the register you want to provide data for (e.g., `Register 37113: Active power`).
@@ -51,6 +52,10 @@ Click **CONFIGURE** on the integration page. You will see two options:
    - Displays a complete table of all your currently mapped registers.
    - You can quickly adjust entities, fixed values, and factors all in one place.
    - To **delete** a register, simply clear both the Entity ID and the Fixed Value fields and click Submit.
+3. **Edit settings:**
+   - Change the **UDP Discovery Port** without recreating the integration.
+   - Use `6600` for older SCharger firmware (pre-SPC231) or `10086` for SCharger firmware `V100R023C10SPC231` and later.
+   - Changing the port requires reloading the integration to take effect.
 
 ### Common Huawei Registers
 To get started, you will typically want to map at least the following:
@@ -60,8 +65,10 @@ To get started, you will typically want to map at least the following:
 
 ## Troubleshooting
 
-- **Address already in use:** The integration runs a Modbus TCP server on port `502` and a UDP listener on port `6600`. Ensure no other add-ons or integrations on your Home Assistant OS are occupying these ports.
+- **Address already in use:** The integration runs a Modbus TCP server on port `502` and a UDP discovery listener (default port `6600`, or `10086` for SPC231+ firmware). Ensure no other add-ons or integrations on your Home Assistant OS are occupying these ports.
 - **SCharger doesn't connect:** Ensure that your SCharger is on the same local network subnet as your Home Assistant instance, as UDP broadcasts are used for discovery.
+- **Wrong UDP discovery port:** SCharger firmware `V100R023C10SPC231` and later changed the UDP discovery port from `6600` to `10086`. If your SCharger is running SPC231+, go to **Settings** > **Devices & Services** > **Huawei Virtual Meter Emulator** > **CONFIGURE** > **Edit settings** and set the UDP Discovery Port to `10086`. Then reload the integration.
+- **SCharger sends TLS on port 502:** SChargers with firmware SPC231 enforce TLS-secured Modbus (MBAS) when the discovery handshake is not completed. Ensuring the UDP discovery port is correct (10086 for SPC231+) allows the SCharger to receive the discovery response and establish a non-TLS connection.
 
 ## Disclaimer
 

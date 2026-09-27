@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "Set up Virtual Meter",
-        "description": "Please select the IP address and provide a serial number.",
+        "description": "Select the IP address and provide a serial number.\n\nUDP Discovery Port: Use 6600 for older firmware (pre-SPC231). Use 10086 for SCharger firmware V100R023C10SPC231 and later.",
         "data": {
           "emulator_ip": "Emulator IP Address",
-          "serial": "Serial Number"
+          "serial": "Serial Number",
+          "udp_port": "UDP Discovery Port (6600 = pre-SPC231, 10086 = SPC231+)"
         }
       }
     }
@@ -21,7 +22,8 @@
         "description": "What would you like to do?",
         "menu_options": {
           "add_register": "Add a new register mapping",
-          "edit_registers": "Edit configured registers"
+          "edit_registers": "Edit configured registers",
+          "edit_settings": "Edit settings (UDP discovery port)"
         }
       },
       "add_register": {
@@ -35,6 +37,13 @@
       "edit_registers": {
         "title": "Edit Registers",
         "description": "Here you can see all configured registers as a list. To delete a register, simply clear both the entity and fixed value fields."
+      },
+      "edit_settings": {
+        "title": "Settings",
+        "description": "Configure the UDP discovery port.\n\nUse 6600 for older firmware (pre-SPC231). Use 10086 for SCharger firmware V100R023C10SPC231 and later.\n\nChanging this requires reloading the integration.",
+        "data": {
+          "udp_port": "UDP Discovery Port"
+        }
       }
     }
   }

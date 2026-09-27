@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.event import async_track_state_change_event
-from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, METER_REGISTERS
+from .const import DOMAIN, CONF_REGISTERS, CONF_EMULATOR_IP, CONF_SERIAL, CONF_UDP_PORT, DEFAULT_UDP_PORT, METER_REGISTERS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,27 +120,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         def datagram_received(self, data, addr):
             if data.startswith(MAGIC + APP_MAGIC):
                 try:
+                    _LOGGER.info("UDP discovery request received from %s (%d bytes)", addr[0], len(data))
                     resp = (MAGIC + APP_MAGIC + b"\x2f\x00" + 
                             entry.data[CONF_SERIAL].encode().ljust(20, b"\x00") + 
                             b"\x00\x05\x00\x01\x02\x00\xf6\x01\x05\x01\x64\x07\x01\x00\x08\x04" + 
                             ipaddress.IPv4Address(entry.data[CONF_EMULATOR_IP]).packed[::-1] + 
                             b"\x0A\x04\x00\x00\x00\x00")
                     self.transport.sendto(resp, addr)
+                    _LOGGER.info("UDP discovery response sent to %s (emulator IP: %s)", addr[0], entry.data[CONF_EMULATOR_IP])
                 except Exception as err:
                     _LOGGER.error("Fehler beim Senden der UDP-Antwort: %s", err)
 
     udp_protocol = VirtualMeterUDP()
+    udp_port = entry.data.get(CONF_UDP_PORT, DEFAULT_UDP_PORT)
     try:
         transport, _ = await loop.create_datagram_endpoint(
             lambda: udp_protocol, 
-            local_addr=("0.0.0.0", 6600), 
+            local_addr=("0.0.0.0", udp_port), 
             allow_broadcast=True
         )
         entry_data["udp"] = transport
         entry_data["udp_protocol"] = udp_protocol
+        _LOGGER.info("UDP discovery server listening on port %d", udp_port)
     except OSError as err:
         if err.errno == errno.EADDRINUSE:
-            raise ConfigEntryNotReady("UDP Port 6600 wird bereits verwendet") from err
+            raise ConfigEntryNotReady(f"UDP Port {udp_port} wird bereits verwendet") from err
         raise ConfigEntryNotReady(f"UDP Server konnte nicht gestartet werden: {err}") from err
 
     async def handle_modbus(reader, writer):
