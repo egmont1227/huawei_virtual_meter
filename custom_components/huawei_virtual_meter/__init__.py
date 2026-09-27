@@ -201,14 +201,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     # (starts with 0xF6, contains serial + crypto challenge +
                     # CRC16-Modbus checksum) BEFORE any Modbus traffic.
                     # If unanswered, the wallbox falls back to TLS.
-                    # Strategy: acknowledge the frame and delay, letting the
-                    # wallbox transition to standard Modbus reads.
+                    # We do NOT send a response yet — the correct response
+                    # format is unknown. Sending a wrong response causes the
+                    # wallbox to report "wallBoxPowerSensor communication error".
                     if not handshake_done and len(frame) >= 4 and frame[0] == 0xF6:
-                        _LOGGER.info("Huawei handshake frame received (%d bytes) from %s — acknowledging",
+                        _LOGGER.info("Huawei handshake frame received (%d bytes) from %s — ignoring (no response)",
                                      len(frame), writer.get_extra_info('peername'))
                         handshake_done = True
-                        # Don't send a response — just ACK at TCP level (automatic).
-                        # The wallbox will retry, and eventually transition to Modbus.
                         continue
                     
                     # --- TLS ClientHello detection ---
