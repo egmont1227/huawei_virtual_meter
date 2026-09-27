@@ -102,9 +102,29 @@ For a typical single-phase setup with a Huawei SCharger:
 
 ### Common Huawei Registers
 To get started, you will typically want to map at least the following:
-- **37113 (Active power):** Your total home grid consumption/export. (Positive = exporting to grid / surplus available, Negative = consuming from grid).
-- **37125 (Meter type):** Usually set as a **Fixed Value**: `0` for Single-Phase, `1` for Three-Phase.
-- **37101, 37103, 37105 (Phase Voltages):** Can be mapped to voltage sensors or set to a fixed value like `230`.
+
+#### Essential Registers
+
+- **37113 (Active power):** The most important register. Maps to your home grid power sensor. The SCharger uses this to determine available PV surplus. **Positive = exporting to grid / surplus available**, Negative = consuming from grid. Factor = 1 (value in watts).
+- **37125 (Meter type):** Tells the SCharger whether the meter is single-phase or three-phase. Set as a **Fixed Value**: `0` for Single-Phase, `1` for Three-Phase. Factor = 1.
+- **37101, 37103, 37105 (Phase Voltages):** Grid voltage for phases A, B, and C. Can be mapped to voltage sensors or set to a **Fixed Value** of `230` (representing 230.0 V). Factor = 10 (230.0 × 10 = 2300 in the register).
+
+#### Recommended Registers
+
+- **37117 (Power factor):** Cos phi of the grid connection. Map to your power factor sensor. Factor = 1000 (e.g., 0.95 → 950 in the register).
+- **37118 (Grid frequency):** Grid frequency in Hz. Map to your frequency sensor. Factor = 100 (e.g., 50.0 Hz → 5000 in the register).
+- **37100 (Meter status):** Online/offline status of the meter. Set as a **Fixed Value** of `1` (online). Factor = 1.
+
+#### Optional Registers (for completeness)
+
+- **37107, 37109, 37111 (Phase Currents):** Grid current for phases A, B, and C. Map to current sensors if available. Factor = 10 (e.g., 15.5 A → 155 in the register).
+- **37115 (Reactive power):** Total reactive power in VAR. Map to a reactive power sensor if available. Factor = 1000.
+- **37119 (Positive active electricity):** Accumulated imported energy in Wh. Map to a grid import energy sensor. Factor = 1.
+- **37121 (Reverse active electricity):** Accumulated exported energy in Wh. Map to a grid export energy sensor. Factor = 1.
+- **37123 (Accumulated reactive power):** Accumulated reactive energy in varh. Factor = 1.
+- **37126, 37128, 37130 (Line Voltages):** A-B, B-C, and C-A line-to-line voltages. Typically only needed for three-phase setups. Factor = 10.
+- **37132, 37134, 37136 (Phase Active Power):** Per-phase active power breakdown. Map to individual phase power sensors if available. Factor = 1.
+- **37138 (Meter model detection):** Detection result for the meter model. Usually left unmapped or set to a fixed value.
 
 ## Troubleshooting
 
